@@ -1,0 +1,17 @@
+{
+  "name": "nimbus-support-tools",
+  "version": "1.2.0",
+  "description": "Tool-selection eval for the Nimbus support agent (4 tools + no-tool).",
+  "spec": "SYSTEM_PROMPT in eval.py -- every label must be justifiable from it",
+  "owner": "ankit",
+  "changelog": [
+    {"version": "1.0.0", "date": "2026-08-23", "rows": 24,
+     "change": "initial handwritten set", "breaking": false},
+    {"version": "1.1.0", "date": "2026-08-23", "rows": 27,
+     "change": "added self-correction family sup-025..027", "breaking": false},
+    {"version": "1.2.0", "date": "2026-08-23", "rows": 28,
+     "change": "RELABELLED sup-017 (label was wrong: no address given, so asking is correct); added sup-028 from production trace tr_008; assigned dev/holdout splits",
+     "breaking": true,
+     "note": "breaking = a label changed, so scores from 1.1.0 and earlier are NOT comparable"}
+  ]
+}

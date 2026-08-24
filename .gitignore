@@ -1,0 +1,15 @@
+# Environment files — never commit secrets
+.env
+.env.*
+!.env.example
+
+# OS junk
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+.cache/
+
+# Node
+node_modules/

@@ -1,0 +1,602 @@
+{
+  "_about": "Every field a production eval dataset row can carry. Reference for Topic 9.",
+  "_legend": {
+    "supported": "true = eval.py in this folder already reads it; false = not implemented yet",
+    "used_by": "code = affects your score | human = documentation only",
+    "priority": "start = use from day one | soon = add when it hurts | later = advanced"
+  },
+  "_start_here": {
+    "_note": "7 fields. Do not add more until a real problem demands it.",
+    "id": "sup-006",
+    "input": "Don't cancel my order - I just want to know where it is. It's #111",
+    "expected_tool": "track_order",
+    "expected_args": { "order_id": "111" },
+    "tags": ["negation"],
+    "source": "production_log",
+    "why": "Policy: act on final intent, not on earlier words."
+  },
+  "_trap": "Unknown fields are silently ignored. Writing 'expected_arguments' instead of 'expected_args' produces a FAKE FAILURE on a perfectly correct answer. Always check which names your harness actually reads.",
+
+  "groups": [
+    {
+      "group": "identity_and_lifecycle",
+      "purpose": "Name the test and control whether it runs.",
+      "fields": [
+        {
+          "field": "id",
+          "type": "string",
+          "required": true,
+          "supported": true,
+          "used_by": "human",
+          "priority": "start",
+          "description": "The test's permanent name. You will cite it in tickets for months.",
+          "example": "sup-004",
+          "note": "Never renumber. Renaming an id destroys your failure history."
+        },
+        {
+          "field": "split",
+          "type": "string",
+          "enum": ["dev", "holdout"],
+          "supported": false,
+          "used_by": "code",
+          "priority": "soon",
+          "description": "dev = rows you tune prompts against. holdout = rows you touch rarely, to check you did not just memorise the dev set.",
+          "example": "holdout",
+          "note": "Add this the day you start editing prompts to fix eval failures."
+        },
+        {
+          "field": "enabled",
+          "type": "boolean",
+          "supported": false,
+          "used_by": "code",
+          "priority": "soon",
+          "description": "Turn a row off without deleting it.",
+          "example": false
+        },
+        {
+          "field": "quarantine",
+          "type": "boolean",
+          "supported": false,
+          "used_by": "code",
+          "priority": "later",
+          "description": "Known unreliable row. Still runs and is reported, but is not allowed to fail the build.",
+          "example": true
+        },
+        {
+          "field": "known_failure",
+          "type": "boolean",
+          "supported": false,
+          "used_by": "code",
+          "priority": "later",
+          "description": "This row is expected to fail today. Alerts you when it starts PASSING, so you notice the fix.",
+          "example": true
+        },
+        {
+          "field": "owner",
+          "type": "string",
+          "supported": false,
+          "used_by": "human",
+          "priority": "later",
+          "description": "Who to ask when someone disputes this label.",
+          "example": "support-team"
+        },
+        {
+          "field": "created_at",
+          "type": "string (ISO date)",
+          "supported": false,
+          "used_by": "human",
+          "priority": "later",
+          "description": "When the row was written. Old rows go stale as the product changes.",
+          "example": "2026-08-23"
+        }
+      ]
+    },
+    {
+      "group": "input",
+      "purpose": "What the system under test receives. This is the ONLY part sent to the model.",
+      "fields": [
+        {
+          "field": "input",
+          "type": "string",
+          "required": true,
+          "supported": true,
+          "used_by": "code",
+          "priority": "start",
+          "description": "The customer's message, exactly as a real user would type it, typos included.",
+          "example": "wher is my ordr #222",
+          "note": "Do not clean it up. Cleaned inputs give you a cleaned-up score."
+        },
+        {
+          "field": "messages",
+          "type": "array of {role, content}",
+          "supported": false,
+          "used_by": "code",
+          "priority": "soon",
+          "description": "A whole conversation instead of one line. Needed the moment behavior depends on earlier turns.",
+          "example": [
+            { "role": "user", "content": "I want to cancel" },
+            { "role": "assistant", "content": "Which order?" },
+            { "role": "user", "content": "#123" }
+          ],
+          "topic": "13 (multi-turn evals)"
+        },
+        {
+          "field": "context",
+          "type": "array of strings",
+          "supported": false,
+          "used_by": "code",
+          "priority": "soon",
+          "description": "Documents retrieved and handed to the model. Required for RAG evals: you cannot judge groundedness without knowing what it was given.",
+          "example": ["Refunds take 5-7 business days."],
+          "topic": "10 (RAG evals)"
+        },
+        {
+          "field": "tool_state",
+          "type": "object",
+          "supported": false,
+          "used_by": "code",
+          "priority": "later",
+          "description": "The starting state of the world: which orders exist, their status. Without it, 'cancel #123' has no defined correct answer.",
+          "example": { "orders": { "123": { "status": "shipped" } } }
+        },
+        {
+          "field": "user_profile",
+          "type": "object",
+          "supported": false,
+          "used_by": "code",
+          "priority": "later",
+          "description": "Who is asking. Correct behavior often depends on tier, locale, or permissions.",
+          "example": { "tier": "enterprise", "locale": "en-GB" }
+        },
+        {
+          "field": "attachments",
+          "type": "array of file paths / urls",
+          "supported": false,
+          "used_by": "code",
+          "priority": "later",
+          "description": "Image, audio, or file inputs for multimodal systems.",
+          "example": ["receipt.png"],
+          "topic": "28 (specialized evals)"
+        }
+      ]
+    },
+    {
+      "group": "expected_actions",
+      "purpose": "What the agent should DO. The most important group for agents.",
+      "fields": [
+        {
+          "field": "expected_tool",
+          "type": "string or null",
+          "required": true,
+          "supported": true,
+          "used_by": "code",
+          "priority": "start",
+          "description": "Which tool should be called. null means 'call nothing, reply in words'.",
+          "example": "cancel_order",
+          "note": "Rows with null are your negative cases. Without them, an agent that always calls a tool scores well."
+        },
+        {
+          "field": "expected_args",
+          "type": "object",
+          "supported": true,
+          "used_by": "code",
+          "priority": "start",
+          "description": "The argument values the tool should be called with.",
+          "example": { "order_id": "123" },
+          "note": "Only graded when expected_tool matched. Args checked against the wrong tool are a meaningless number."
+        },
+        {
+          "field": "arg_match",
+          "type": "object (field -> mode)",
+          "supported": true,
+          "used_by": "code",
+          "priority": "start",
+          "description": "How strictly to compare each argument. exact = character-for-character. fuzzy = words mostly overlap (for free text like addresses). ignore = do not check.",
+          "example": { "new_address": "fuzzy" },
+          "modes": ["exact", "fuzzy", "ignore"]
+        },
+        {
+          "field": "expected_tools",
+          "type": "array of strings",
+          "supported": false,
+          "used_by": "code",
+          "priority": "soon",
+          "description": "An ORDERED sequence of calls, for agents that take several steps.",
+          "example": ["lookup_order", "check_policy", "cancel_order"],
+          "topic": "12 (trace and trajectory evals)"
+        },
+        {
+          "field": "allowed_tools",
+          "type": "array of strings",
+          "supported": false,
+          "used_by": "code",
+          "priority": "soon",
+          "description": "Any one of these is acceptable. Use when two tools are genuinely both correct, instead of forcing a fake single answer.",
+          "example": ["track_order", "refund_status"]
+        },
+        {
+          "field": "forbidden_tools",
+          "type": "array of strings",
+          "supported": false,
+          "used_by": "code",
+          "priority": "soon",
+          "description": "Must NEVER be called on this input. Your safety rail.",
+          "example": ["delete_account", "issue_refund"],
+          "note": "Worth far more than text checks. A wrong word is embarrassing; a wrong action costs money."
+        },
+        {
+          "field": "max_tool_calls",
+          "type": "integer",
+          "supported": false,
+          "used_by": "code",
+          "priority": "soon",
+          "description": "Call budget. Catches agents stuck in a loop.",
+          "example": 3
+        },
+        {
+          "field": "must_not",
+          "type": "array of strings",
+          "supported": false,
+          "used_by": "code",
+          "priority": "soon",
+          "description": "Side effects that must not happen, described as behavior rather than text. Graded by inspecting the tool calls, not the reply.",
+          "example": ["cancel another order", "email the customer"],
+          "topic": "39 (side-effect evals)"
+        }
+      ]
+    },
+    {
+      "group": "expected_text",
+      "purpose": "What the agent should SAY. This is all you have on rows where expected_tool is null.",
+      "fields": [
+        {
+          "field": "reply_contains",
+          "type": "array of strings",
+          "supported": true,
+          "used_by": "code",
+          "priority": "start",
+          "description": "Every one of these must appear in the reply (case-insensitive).",
+          "example": ["order"]
+        },
+        {
+          "field": "reply_not_contains",
+          "type": "array of strings",
+          "supported": true,
+          "used_by": "code",
+          "priority": "start",
+          "description": "None of these may appear. Catches catastrophes cheaply.",
+          "example": ["cancelled", "canceled"],
+          "note": "On a row that must do nothing, the reply saying 'cancelled' means the agent thinks it acted."
+        },
+        {
+          "field": "reply_regex",
+          "type": "string",
+          "supported": false,
+          "used_by": "code",
+          "priority": "soon",
+          "description": "Pattern the reply must match. Good for formats: dates, ids, currency.",
+          "example": "\\b\\d{3}\\b"
+        },
+        {
+          "field": "expected_output",
+          "type": "string",
+          "supported": false,
+          "used_by": "code",
+          "priority": "soon",
+          "description": "A reference answer. Cannot be compared with ==; needs fuzzy matching, embeddings, or an LLM judge.",
+          "example": "Your refund for order 321 was processed on Tuesday.",
+          "topic": "5 (graders)"
+        },
+        {
+          "field": "acceptable_outputs",
+          "type": "array of strings",
+          "supported": false,
+          "used_by": "code",
+          "priority": "later",
+          "description": "Several valid answers. Honest about questions with more than one right response.",
+          "example": ["I cannot help with that.", "That is outside what I can do."]
+        },
+        {
+          "field": "expected_citations",
+          "type": "array of strings",
+          "supported": false,
+          "used_by": "code",
+          "priority": "later",
+          "description": "Which sources the answer must cite. A right answer citing the wrong document is still a failure.",
+          "example": ["refund-policy-v3#section2"],
+          "topic": "10 (RAG evals)"
+        },
+        {
+          "field": "expected_refusal",
+          "type": "boolean",
+          "supported": false,
+          "used_by": "code",
+          "priority": "later",
+          "description": "The agent must decline. Distinguishes 'I cannot' from 'I will not'.",
+          "example": true
+        },
+        {
+          "field": "json_schema",
+          "type": "object",
+          "supported": false,
+          "used_by": "code",
+          "priority": "later",
+          "description": "For structured output: the reply must validate against this schema.",
+          "example": { "type": "object", "required": ["status"] }
+        }
+      ]
+    },
+    {
+      "group": "grading_config",
+      "purpose": "How this specific row gets scored. Different rows deserve different graders.",
+      "fields": [
+        {
+          "field": "grader",
+          "type": "string",
+          "enum": ["code", "llm_judge", "human"],
+          "supported": false,
+          "used_by": "code",
+          "priority": "soon",
+          "description": "Who decides pass or fail for this row.",
+          "example": "llm_judge",
+          "topic": "5 (graders)"
+        },
+        {
+          "field": "rubric",
+          "type": "string",
+          "supported": false,
+          "used_by": "code",
+          "priority": "soon",
+          "description": "Written scoring guide handed to a judge. Vague rubrics produce random scores.",
+          "example": "Pass if the reply asks for the order id and does not claim any action was taken.",
+          "topic": "6 (rubrics)"
+        },
+        {
+          "field": "judge_model",
+          "type": "string",
+          "supported": false,
+          "used_by": "code",
+          "priority": "soon",
+          "description": "Pin the judge model. Changing the judge changes every score, so it must be recorded.",
+          "example": "gpt-5.6-luna",
+          "topic": "20 (judge reliability)"
+        },
+        {
+          "field": "threshold",
+          "type": "number",
+          "supported": false,
+          "used_by": "code",
+          "priority": "later",
+          "description": "Pass mark when scoring is a scale rather than pass/fail.",
+          "example": 0.8
+        },
+        {
+          "field": "weight",
+          "type": "number",
+          "supported": false,
+          "used_by": "code",
+          "priority": "soon",
+          "description": "How much this row counts. A wrongly cancelled order should outweigh a clumsy greeting.",
+          "example": 5,
+          "note": "Unweighted averages quietly say every mistake costs the same. They never do."
+        },
+        {
+          "field": "partial_credit",
+          "type": "boolean",
+          "supported": false,
+          "used_by": "code",
+          "priority": "later",
+          "description": "Allow 0.5 rather than only 0 or 1. Useful when 'right tool, wrong id' is better than 'wrong tool'.",
+          "example": true
+        }
+      ]
+    },
+    {
+      "group": "slicing",
+      "purpose": "How results get grouped. The group that earns its keep: 87% overall hid address 0%.",
+      "fields": [
+        {
+          "field": "tags",
+          "type": "array of strings",
+          "supported": true,
+          "used_by": "code",
+          "priority": "start",
+          "description": "Free-form slice labels. A row can carry several.",
+          "example": ["negation", "typo", "missing_id"],
+          "note": "The single highest-value field after expected_tool. No tags means no diagnosis."
+        },
+        {
+          "field": "category",
+          "type": "string",
+          "supported": false,
+          "used_by": "code",
+          "priority": "soon",
+          "description": "One primary bucket per row, unlike tags. Keeps the report readable as the dataset grows.",
+          "example": "address_change"
+        },
+        {
+          "field": "difficulty",
+          "type": "string",
+          "enum": ["easy", "medium", "hard"],
+          "supported": false,
+          "used_by": "code",
+          "priority": "soon",
+          "description": "Track the hard slice separately, or easy rows will mask real regressions.",
+          "example": "hard"
+        },
+        {
+          "field": "severity",
+          "type": "string",
+          "enum": ["cosmetic", "annoying", "financial", "safety"],
+          "supported": false,
+          "used_by": "code",
+          "priority": "soon",
+          "description": "How bad failure is here. Lets you gate releases on safety failures while tolerating cosmetic ones.",
+          "example": "financial"
+        },
+        {
+          "field": "language",
+          "type": "string",
+          "supported": false,
+          "used_by": "code",
+          "priority": "soon",
+          "description": "Non-English performance hides inside a global average. Slice it out.",
+          "example": "es"
+        },
+        {
+          "field": "customer_tier",
+          "type": "string",
+          "supported": false,
+          "used_by": "code",
+          "priority": "later",
+          "description": "Failures do not cost the same across segments.",
+          "example": "enterprise"
+        }
+      ]
+    },
+    {
+      "group": "provenance_and_governance",
+      "purpose": "Where the label came from and who is accountable for it. Boring until an auditor asks.",
+      "fields": [
+        {
+          "field": "source",
+          "type": "string",
+          "enum": ["handwritten", "production_log", "synthetic", "red_team", "bug_report"],
+          "supported": true,
+          "used_by": "human",
+          "priority": "start",
+          "description": "Where this test case came from.",
+          "example": "production_log",
+          "note": "If most rows are 'handwritten', you are testing your imagination, not your users."
+        },
+        {
+          "field": "why",
+          "type": "string",
+          "supported": true,
+          "used_by": "human",
+          "priority": "start",
+          "description": "The policy line that makes this label correct. Written for the version of you that reads it in three months.",
+          "example": "Policy: act on final intent, not on earlier words.",
+          "note": "If you cannot write this, the row is too ambiguous to keep. This is the cheapest quality filter you have."
+        },
+        {
+          "field": "source_trace_id",
+          "type": "string",
+          "supported": false,
+          "used_by": "human",
+          "priority": "soon",
+          "description": "Link back to the real production trace this row came from, so you can see the full context later.",
+          "example": "trace_8f2a91"
+        },
+        {
+          "field": "labeled_by",
+          "type": "string",
+          "supported": false,
+          "used_by": "human",
+          "priority": "soon",
+          "description": "Which human decided the expected answer.",
+          "example": "ankit"
+        },
+        {
+          "field": "label_confidence",
+          "type": "string",
+          "enum": ["certain", "probable", "disputed"],
+          "supported": false,
+          "used_by": "human",
+          "priority": "soon",
+          "description": "Flags rows annotators argued about. If humans disagree, an LLM judge has no chance.",
+          "example": "disputed",
+          "topic": "19 (human evaluation)"
+        },
+        {
+          "field": "reviewed_by",
+          "type": "string",
+          "supported": false,
+          "used_by": "human",
+          "priority": "later",
+          "description": "Second pair of eyes on the label. Audit trail.",
+          "example": "qa-lead"
+        },
+        {
+          "field": "policy_ref",
+          "type": "string",
+          "supported": false,
+          "used_by": "human",
+          "priority": "later",
+          "description": "Pointer to the document and section this label comes from.",
+          "example": "support-policy-v3#cancellations"
+        },
+        {
+          "field": "contains_pii",
+          "type": "boolean",
+          "supported": false,
+          "used_by": "code",
+          "priority": "soon",
+          "description": "Real customer data. Must be scrubbed before the dataset is shared or sent to a third-party judge.",
+          "example": true,
+          "topic": "44 (governance)"
+        },
+        {
+          "field": "regression_of",
+          "type": "string",
+          "supported": false,
+          "used_by": "human",
+          "priority": "soon",
+          "description": "The bug or ticket this row was born from. These are your most valuable rows: real failures that already happened once.",
+          "example": "BUG-412"
+        }
+      ]
+    },
+    {
+      "group": "performance_budgets",
+      "purpose": "Correctness is not the only requirement. A right answer in 40 seconds is a wrong answer.",
+      "fields": [
+        {
+          "field": "max_latency_ms",
+          "type": "integer",
+          "supported": false,
+          "used_by": "code",
+          "priority": "soon",
+          "description": "Fail the row if the response took longer than this.",
+          "example": 3000,
+          "topic": "16 (performance evals)"
+        },
+        {
+          "field": "max_cost_usd",
+          "type": "number",
+          "supported": false,
+          "used_by": "code",
+          "priority": "later",
+          "description": "Fail if the row cost too much to answer.",
+          "example": 0.02
+        },
+        {
+          "field": "max_tokens",
+          "type": "integer",
+          "supported": false,
+          "used_by": "code",
+          "priority": "later",
+          "description": "Catches runaway generation and rambling replies.",
+          "example": 300
+        },
+        {
+          "field": "timeout_ms",
+          "type": "integer",
+          "supported": false,
+          "used_by": "code",
+          "priority": "later",
+          "description": "Per-row timeout override, for rows you know are slow.",
+          "example": 90000
+        }
+      ]
+    }
+  ],
+
+  "_add_next_in_this_order": [
+    "split - the day you start tuning prompts against the dataset",
+    "severity + weight - so a wrongly cancelled order outranks a typo",
+    "forbidden_tools + must_not - side effects cost real money",
+    "expected_tools - when the agent takes more than one step",
+    "grader + rubric - when == stops working and you need a judge"
+  ]
+}
