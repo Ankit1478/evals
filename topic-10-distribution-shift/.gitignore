@@ -1,0 +1,4 @@
+evals.db
+results/
+__pycache__/
+.cache/
