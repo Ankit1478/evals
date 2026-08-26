@@ -1,0 +1,4 @@
+{"id":"good-track","model_output":"{\"action\": \"track_order\", \"order_id\": \"101\", \"message\": \"I will track your order.\"}","expected_action":"track_order","expected_order_id":"101","must_include":["track"],"must_not_include":["cancelled"]}
+{"id":"wrong-action","model_output":"{\"action\": \"cancel_order\", \"order_id\": \"102\", \"message\": \"I cancelled your order.\"}","expected_action":"track_order","expected_order_id":"102","must_include":["track"],"must_not_include":["cancelled"]}
+{"id":"wrong-order-id","model_output":"{\"action\": \"track_order\", \"order_id\": \"999\", \"message\": \"I will track your order.\"}","expected_action":"track_order","expected_order_id":"103","must_include":["track"],"must_not_include":[]}
+{"id":"not-json","model_output":"I will track order 104","expected_action":"track_order","expected_order_id":"104","must_include":["track"],"must_not_include":[]}
