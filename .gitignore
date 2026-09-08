@@ -13,5 +13,3 @@ __pycache__/
 
 # Node
 node_modules/
-
-# Reference PDFs kept locally, not in git
