@@ -1,0 +1,4 @@
+pairwise.db
+preferences.jsonl
+__pycache__/
+*.pyc
