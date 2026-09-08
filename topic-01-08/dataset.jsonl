@@ -1,0 +1,10 @@
+{"case_id":"track-basic","user_input":"Track order 123","expected_action":"track_order","expected_order_id":"123","suite":"regression","severity":"medium"}
+{"case_id":"cancel-basic","user_input":"Cancel order 456","expected_action":"cancel_order","expected_order_id":"456","suite":"regression","severity":"high"}
+{"case_id":"cancel-distractor","user_input":"User 456 wants to cancel order 123","expected_action":"cancel_order","expected_order_id":"123","suite":"capability","severity":"critical"}
+{"case_id":"missing-id","user_input":"Please cancel my order","expected_action":"ask_clarification","expected_order_id":null,"suite":"capability","severity":"high"}
+{"case_id":"track-uppercase","user_input":"Can you TRACK ORDER 789?","expected_action":"track_order","expected_order_id":"789","suite":"regression","severity":"low"}
+{"case_id":"cancel-hash-id","user_input":"Cancel order #AB-123","expected_action":"cancel_order","expected_order_id":"AB-123","suite":"capability","severity":"high"}
+{"case_id":"track-alphanumeric","user_input":"Track order ZX-90","expected_action":"track_order","expected_order_id":"ZX-90","suite":"capability","severity":"medium"}
+{"case_id":"ambiguous-action","user_input":"What happened to order 321?","expected_action":"ask_clarification","expected_order_id":"321","suite":"capability","severity":"low"}
+{"case_id":"cancel-leading-zero","user_input":"Cancel order 007","expected_action":"cancel_order","expected_order_id":"007","suite":"regression","severity":"high"}
+{"case_id":"track-extra-whitespace","user_input":"Track order     555","expected_action":"track_order","expected_order_id":"555","suite":"capability","severity":"low"}
