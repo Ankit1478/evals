@@ -113,7 +113,7 @@ the number goes up while the system gets worse.
 ## Always ship a baseline
 | agent | strict |
 |---|---|
-| keyword regex | 45.8% |
+| keyword regex (removed from eval.py) | 45.8% |
 | gpt-5.6-luna | 87.5% |
 
 42-point gap = a real product. A 5-point gap = an expensive regex.
@@ -126,7 +126,6 @@ prompt next week, the thing that used to work doesn't silently break.
 ---
 **Commands**
 ```bash
-python3 eval.py --agent keyword          # free baseline
 python3 eval.py --agent llm              # real run (cached after first)
 python3 eval.py --agent llm --id sup-017 # debug one case
 python3 eval.py --agent llm --tag negation

@@ -4,10 +4,9 @@
  TOPIC 9 -- EVALUATION DATASETS : a complete, runnable eval harness
 =============================================================================
 
- One file. Zero dependencies. Real Azure OpenAI calls.
+ One file. Zero dependencies. Standard OpenAI API calls.
 
    python3 eval.py --agent llm                 # run the whole dev set
-   python3 eval.py --agent keyword             # run the dumb baseline (free)
    python3 eval.py --agent llm --tag negation  # run one slice
    python3 eval.py --agent llm --repeat 3      # measure run-to-run flakiness
    python3 eval.py --agent llm --gate 0.85     # CI mode: exit 1 if below
@@ -18,9 +17,9 @@
 
  SECTIONS
    1. Config (.env)          5. Graders
-   2. Azure OpenAI client    6. Runner
+   2. OpenAI API client      6. Runner
    3. Tools + policy         7. Report
-   4. Agents (2 of them)     8. CLI
+   4. Agent                  8. CLI
 =============================================================================
 """
 
@@ -68,7 +67,7 @@ RESULTS_DIR = os.path.join(HERE, "results")
 
 
 # =============================================================================
-# 2. AZURE OPENAI CLIENT -- stdlib HTTP, with caching + retries
+# 2. OPENAI CLIENT -- stdlib HTTP, with caching + retries
 #
 # An eval harness needs three things a plain SDK call does not give you:
 #   * caching     -- so re-running an unchanged case costs nothing
@@ -81,8 +80,8 @@ RESULTS_DIR = os.path.join(HERE, "results")
 RETRY_STATUSES = (0, 408, 409, 429, 500, 502, 503, 504)
 
 
-def _cache_path(payload, deployment, version):
-    blob = json.dumps({"p": payload, "d": deployment, "v": version}, sort_keys=True)
+def _cache_path(payload, model):
+    blob = json.dumps({"p": payload, "m": model}, sort_keys=True)
     key = hashlib.sha256(blob.encode("utf-8")).hexdigest()[:32]
     return os.path.join(CACHE_DIR, key + ".json")
 
@@ -106,22 +105,23 @@ def _post(url, headers, payload, timeout):
 def chat(messages, tools=None, temperature=0.0, max_tokens=512,
          timeout=60, use_cache=True, max_retries=3):
     """One chat-completions call -> normalized dict."""
-    endpoint = env("AZURE_OPENAI_ENDPOINT", required=True).rstrip("/")
-    deployment = env("AZURE_OPENAI_DEPLOYMENT", required=True)
-    version = env("AZURE_OPENAI_API_VERSION", "2024-10-21")
+    api_key = env("OPENAI_API_KEY", required=True)
+    model = env("OPENAI_MODEL", "gpt-5.6-luna")
 
-    url = "%s/openai/deployments/%s/chat/completions?api-version=%s" % (
-        endpoint, deployment, version)
+    url = "https://api.openai.com/v1/chat/completions"
     headers = {"Content-Type": "application/json",
-               "api-key": env("AZURE_OPENAI_API_KEY", required=True)}
+               "Authorization": "Bearer %s" % api_key}
 
-    payload = {"messages": messages, "temperature": temperature,
+    payload = {"model": model, "messages": messages, "temperature": temperature,
                "max_tokens": max_tokens}
     if tools:
         payload["tools"] = tools
         payload["tool_choice"] = "auto"
+        if model == "gpt-5.6-luna":
+            # Chat Completions function tools require non-reasoning mode for Luna.
+            payload["reasoning_effort"] = "none"
 
-    path = _cache_path(payload, deployment, version)
+    path = _cache_path(payload, model)
     if use_cache and os.path.exists(path):
         try:
             hit = json.load(open(path))
@@ -134,7 +134,7 @@ def chat(messages, tools=None, temperature=0.0, max_tokens=512,
     while True:
         status, data = _post(url, headers, payload, timeout)
         msg = ((data or {}).get("error") or {}).get("message", "") or ""
-        # Some newer deployments reject these params; adapt instead of failing.
+        # Some models reject these params; adapt instead of failing.
         if status == 400 and "max_tokens" in msg and "max_tokens" in payload:
             payload["max_completion_tokens"] = payload.pop("max_tokens")
             continue
@@ -238,43 +238,15 @@ TOOLS = [
 
 
 # =============================================================================
-# 4. AGENTS -- the systems under test
-#
-# Two of them, and that is deliberate. Never report an LLM's score without a
-# dumb baseline next to it: if keyword matching gets 60% and your LLM gets 65%,
-# you do not have an AI product, you have an expensive regex.
+# 4. AGENT -- the system under test
 #
 # Contract: agent(text) -> {"tool": str|None, "args": {...}, ...meta}
 # =============================================================================
 
-ORDER_ID_RE = re.compile(r"#(\d+)")
-
-
-def keyword_agent(text, use_cache=True, temperature=0.0):
-    """Free, instant, deliberately naive. First-match-wins keyword routing."""
-    tool = None
-    if "cancel" in text:
-        tool = "cancel_order"
-    elif "where" in text or "track" in text or "status" in text:
-        tool = "track_order"
-    elif "refund" in text:
-        tool = "refund_status"
-    elif "address" in text:
-        tool = "update_address"
-
-    args = {}
-    if tool:
-        m = ORDER_ID_RE.search(text)
-        if m:
-            args["order_id"] = m.group(1)
-    return {"tool": tool, "args": args, "text": None, "latency_ms": 0,
-            "usage": {}, "cached": False, "error": None, "extra_tool_calls": 0}
-
-
 def llm_agent(text, use_cache=True, temperature=0.0):
-    """Real Azure OpenAI call with tool definitions."""
+    """Real OpenAI API call with tool definitions."""
     r = chat(
-        messages=[{"role": "system", "content": SYSTEM_PROMPT},
+        messages=[{"role": "developer", "content": SYSTEM_PROMPT},
                   {"role": "user", "content": text}],
         tools=TOOLS, temperature=temperature, use_cache=use_cache)
 
@@ -290,7 +262,7 @@ def llm_agent(text, use_cache=True, temperature=0.0):
             "extra_tool_calls": max(0, len(calls) - 1)}
 
 
-AGENTS = {"keyword": keyword_agent, "llm": llm_agent}
+AGENTS = {"llm": llm_agent}
 
 
 # =============================================================================
@@ -527,7 +499,7 @@ def build_report(records, meta):
         meta.get("dataset_version", "?"), meta.get("dataset_fingerprint", "?")))
     add(" split=%s  model=%s  temp=%s  repeat=%d  wall=%.1fs" % (
         meta.get("split", "all"),
-        meta.get("deployment", "-"), meta["temperature"], meta["repeat"],
+        meta.get("model", "-"), meta["temperature"], meta["repeat"],
         meta["wall_seconds"]))
     add("=" * 74)
     add("")
@@ -614,8 +586,8 @@ def build_report(records, meta):
             len(lat), lat[len(lat) // 2], lat[int(len(lat) * 0.95) - 1], lat[-1]))
     add("  cached %d/%d   tokens in=%d out=%d" % (
         sum(1 for r in records if r["cached"]), n, tin, tout))
-    price_in = float(env("AZURE_PRICE_INPUT_PER_1M", "0") or 0)
-    price_out = float(env("AZURE_PRICE_OUTPUT_PER_1M", "0") or 0)
+    price_in = float(env("OPENAI_PRICE_INPUT_PER_1M", "0") or 0)
+    price_out = float(env("OPENAI_PRICE_OUTPUT_PER_1M", "0") or 0)
     if price_in or price_out:
         add("  est. cost $%.4f" % (tin / 1e6 * price_in + tout / 1e6 * price_out))
     add("=" * 74)
@@ -672,7 +644,7 @@ def main():
             "dataset_version": dataset_version(args.dataset),
             "dataset_fingerprint": fingerprint(load_dataset(args.dataset)),
             "subset_fingerprint": fingerprint(cases),
-            "deployment": env("AZURE_OPENAI_DEPLOYMENT", "-") if args.agent == "llm" else "n/a",
+            "model": env("OPENAI_MODEL", "gpt-5.6-luna"),
             "split": args.split or "all",
             "temperature": args.temperature, "repeat": args.repeat,
             "wall_seconds": wall, "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S")}

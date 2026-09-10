@@ -7,14 +7,15 @@ Two files matter here:
 | `dataset.jsonl` | **the asset.** 24 labelled test cases. You will edit this constantly. |
 | `eval.py` | the harness. Read it once, then mostly leave it alone. |
 
-Everything runs on real Azure OpenAI (`gpt-5.6-luna`), no pip installs.
+The LLM agent uses the standard OpenAI API with `gpt-5.6-luna` by default.
+Set `OPENAI_API_KEY` in `.env`; no pip install is required. You can override
+the model with `OPENAI_MODEL`.
 
 ---
 
 ## Run it
 
 ```bash
-python3 eval.py --agent keyword          # dumb baseline, free, instant
 python3 eval.py --agent llm              # the real thing
 python3 eval.py --agent llm --tag negation      # one slice only
 python3 eval.py --agent llm --id sup-004        # one case, for debugging
@@ -76,9 +77,10 @@ The headline number is the **least** useful line. Read in this order:
 
 ## The exercises
 
-**1. Baseline vs. model.** Run both agents. The keyword agent scores ~46%, the
-LLM ~88%. If that gap were 5 points instead of 42, you wouldn't have an AI
-product — you'd have an expensive regex. Always publish the baseline.
+**1. Baseline vs. model.** The keyword baseline that used to live in `eval.py`
+scored ~46% against the LLM's ~88% (run recorded in `NOTES.md`). If that gap
+were 5 points instead of 42, you wouldn't have an AI product — you'd have an
+expensive regex. Always publish a baseline alongside the model score.
 
 **2. Triage the 3 failures — are they model bugs or dataset bugs?**
 This is the core skill of the topic. Two of the three are arguably *your* fault:
