@@ -5,6 +5,7 @@ An eval dataset is a **list of questions with pre-written correct answers**.
 Like an exam answer key. You write it *before* the model runs.
 
 ```
+
 dataset.jsonl ──► eval.py ──► LLM ──► answer
                      │                   │
                      └──── compare ──────┘
